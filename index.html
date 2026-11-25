@@ -1,0 +1,1438 @@
+<!DOCTYPE html>
+<html lang="pl" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lokalny Generator Kodów QR — Bez limitów</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            surface: {
+              950: '#090b10',
+              900: '#0f131c',
+              850: '#151a26',
+              800: '#1c2333',
+              700: '#273045',
+            }
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    /* Subtelne tło siatki w ciemnym motywie */
+    body {
+      background-color: #090b10;
+      background-image:
+        radial-gradient(circle at 50% 0%, rgba(56, 189, 248, 0.08), transparent 55%),
+        radial-gradient(circle at 85% 30%, rgba(99, 102, 241, 0.06), transparent 50%);
+      color: #f1f5f9;
+      min-height: 100vh;
+    }
+
+    /* Niestandardowy podgląd przezroczystości / marginesu */
+    .qr-checkerboard {
+      background-size: 16px 16px;
+      background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+    }
+
+    /* Stylizacja input[type="color"] */
+    input[type="color"] {
+      -webkit-appearance: none;
+      appearance: none;
+      border: none;
+      cursor: pointer;
+    }
+    input[type="color"]::-webkit-color-swatch-wrapper {
+      padding: 0;
+    }
+    input[type="color"]::-webkit-color-swatch {
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      border-radius: 0.5rem;
+    }
+  </style>
+</head>
+<body class="antialiased selection:bg-sky-500/30 selection:text-sky-200">
+  <div class="max-w-6xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
+    <!-- Nagłówek aplikacji -->
+    <header class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-6 border-b border-surface-700/80">
+      <div class="flex items-center gap-3.5">
+        <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-sky-500/20 to-indigo-500/20 border border-sky-400/30 flex items-center justify-center shrink-0 shadow-lg shadow-sky-950/40">
+          <!-- Ikona QR SVG -->
+          <svg class="w-6 h-6 text-sky-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="7" height="7" rx="1.5"></rect>
+            <rect x="14" y="3" width="7" height="7" rx="1.5"></rect>
+            <rect x="3" y="14" width="7" height="7" rx="1.5"></rect>
+            <path d="M14 14h3v3h-3z"></path>
+            <path d="M21 14v7h-7"></path>
+            <path d="M17 21h4"></path>
+          </svg>
+        </div>
+        <div>
+          <div class="flex flex-wrap items-center gap-2">
+            <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-white">
+              Generator Kodów QR
+            </h1>
+            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-300 border border-emerald-500/25">
+              100% Lokalnie • Bez limitów
+            </span>
+          </div>
+          <p class="text-sm text-slate-400 mt-0.5">
+            Generowanie w przeglądarce bez zewnętrznych API, bez limitów skanów i bez śledzenia.
+          </p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2 text-xs text-slate-400 bg-surface-900/90 border border-surface-700/80 px-3 py-2 rounded-xl self-start sm:self-auto">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        <span>Silnik macierzowy JS aktywny</span>
+      </div>
+    </header>
+
+    <!-- Główny układ dwukolumnowy -->
+    <main class="grid grid-cols-1 lg:grid-cols-12 gap-6 mt-6 items-start">
+      <!-- Lewa kolumna: Dane wejściowe i ustawienia (7/12) -->
+      <section class="lg:col-span-7 space-y-6">
+        <!-- Karta 1: Link lub dowolny tekst -->
+        <div class="bg-surface-900/90 border border-surface-700/80 rounded-2xl p-5 sm:p-6 shadow-xl shadow-black/25">
+          <div class="flex items-center justify-between gap-2 mb-3">
+            <label for="qr-input" class="block text-sm font-semibold text-slate-200">
+              Link (URL) lub dowolny tekst
+            </label>
+            <span id="char-counter" class="text-xs font-mono text-slate-400">
+              0 znaków
+            </span>
+          </div>
+
+          <div class="relative">
+            <textarea
+              id="qr-input"
+              rows="3"
+              placeholder="Wpisz lub wklej link, np. przyklad.pl lub https://twoja-strona.pl..."
+              class="w-full rounded-xl bg-surface-950/90 border border-surface-700 focus:border-sky-500 focus:ring-2 focus:ring-sky-500/25 text-slate-100 placeholder-slate-500 px-4 py-3 text-sm sm:text-base font-mono transition outline-none resize-y"
+            >https://example.com</textarea>
+          </div>
+
+          <!-- Komunikat walidacji i szybki przycisk dodania https:// -->
+          <div id="url-helper" class="mt-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-xs rounded-xl px-3.5 py-2.5 bg-surface-850/90 border border-surface-700/70">
+            <div id="url-status-text" class="flex items-center gap-2 text-slate-300">
+              <span class="inline-block w-2 h-2 rounded-full bg-sky-400"></span>
+              <span>Wykryto poprawny adres URL.</span>
+            </div>
+            <div class="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                id="btn-add-https"
+                class="hidden px-2.5 py-1 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 border border-sky-500/30 font-medium transition cursor-pointer"
+              >
+                + Dodaj https://
+              </button>
+              <button
+                type="button"
+                id="btn-clear-input"
+                class="px-2.5 py-1 rounded-lg bg-surface-800 hover:bg-surface-700 text-slate-300 border border-surface-700 font-medium transition cursor-pointer"
+              >
+                Wyczyść
+              </button>
+            </div>
+          </div>
+
+          <!-- Szybkie przykłady do testów -->
+          <div class="mt-4 pt-4 border-t border-surface-800 flex flex-wrap items-center gap-2">
+            <span class="text-xs text-slate-400 mr-1">Szybkie przykłady:</span>
+            <button type="button" data-sample="https://wikipedia.org" class="sample-btn text-xs px-2.5 py-1.5 rounded-lg bg-surface-850 hover:bg-surface-800 text-slate-300 border border-surface-700/80 transition cursor-pointer">
+              Wikipedia
+            </button>
+            <button type="button" data-sample="https://github.com" class="sample-btn text-xs px-2.5 py-1.5 rounded-lg bg-surface-850 hover:bg-surface-800 text-slate-300 border border-surface-700/80 transition cursor-pointer">
+              GitHub
+            </button>
+            <button type="button" data-sample="mailto:kontakt@domena.pl?subject=Zapytanie" class="sample-btn text-xs px-2.5 py-1.5 rounded-lg bg-surface-850 hover:bg-surface-800 text-slate-300 border border-surface-700/80 transition cursor-pointer">
+              E-mail (mailto)
+            </button>
+            <button type="button" data-sample="WIFI:T:WPA;S:MojaSiecWiFi;P:Haslo12345;;" class="sample-btn text-xs px-2.5 py-1.5 rounded-lg bg-surface-850 hover:bg-surface-800 text-slate-300 border border-surface-700/80 transition cursor-pointer">
+              Sieć Wi-Fi
+            </button>
+          </div>
+        </div>
+
+        <!-- Karta 2: Parametry techniczne i wygląd -->
+        <div class="bg-surface-900/90 border border-surface-700/80 rounded-2xl p-5 sm:p-6 shadow-xl shadow-black/25 space-y-6">
+          <div class="flex items-center justify-between">
+            <h2 class="text-sm font-semibold text-slate-200 uppercase tracking-wider">
+              Ustawienia kodu QR
+            </h2>
+            <button
+              type="button"
+              id="btn-reset-defaults"
+              class="text-xs text-sky-400 hover:text-sky-300 font-medium transition cursor-pointer"
+            >
+              Przywróć domyślne
+            </button>
+          </div>
+
+          <!-- Rozmiar PNG oraz Margines (Quiet Zone) -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            <!-- Rozmiar -->
+            <div class="bg-surface-950/60 border border-surface-800 rounded-xl p-4">
+              <div class="flex items-center justify-between mb-2">
+                <label for="qr-size" class="text-sm font-medium text-slate-200">
+                  Rozmiar obrazu
+                </label>
+                <span id="qr-size-value" class="text-xs font-mono font-semibold text-sky-400 bg-sky-500/10 px-2 py-0.5 rounded-md border border-sky-500/20">
+                  320 px
+                </span>
+              </div>
+              <input
+                id="qr-size"
+                type="range"
+                min="200"
+                max="512"
+                step="4"
+                value="320"
+                class="w-full accent-sky-400 cursor-pointer"
+              />
+              <div class="flex justify-between text-[11px] font-mono text-slate-500 mt-1.5">
+                <span>200 px</span>
+                <span>356 px</span>
+                <span>512 px</span>
+              </div>
+            </div>
+
+            <!-- Margines (Quiet Zone) -->
+            <div class="bg-surface-950/60 border border-surface-800 rounded-xl p-4">
+              <div class="flex items-center justify-between mb-2">
+                <label for="qr-margin" class="text-sm font-medium text-slate-200">
+                  Margines (Quiet Zone)
+                </label>
+                <span id="qr-margin-value" class="text-xs font-mono font-semibold text-sky-400 bg-sky-500/10 px-2 py-0.5 rounded-md border border-sky-500/20">
+                  4 mod.
+                </span>
+              </div>
+              <input
+                id="qr-margin"
+                type="range"
+                min="0"
+                max="12"
+                step="1"
+                value="4"
+                class="w-full accent-sky-400 cursor-pointer"
+              />
+              <div class="flex justify-between text-[11px] font-mono text-slate-500 mt-1.5">
+                <span>0 mod.</span>
+                <span>4 mod. (zalecane)</span>
+                <span>12 mod.</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Poziom korekcji błędów (ECC) -->
+          <div>
+            <div class="flex items-center justify-between mb-2.5">
+              <label class="text-sm font-medium text-slate-200">
+                Poziom korekcji błędów (ECC)
+              </label>
+              <span class="text-xs text-slate-400">
+                Wyższy poziom = większa odporność na uszkodzenia
+              </span>
+            </div>
+            <div id="ecc-group" class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+              <button
+                type="button"
+                data-ecc="L"
+                class="ecc-btn flex flex-col items-start p-3 rounded-xl border text-left transition cursor-pointer bg-surface-950/70 border-surface-700 hover:border-slate-500"
+              >
+                <span class="text-sm font-bold text-white">L — Niski</span>
+                <span class="text-xs text-slate-400 mt-0.5">~7% odzysku</span>
+              </button>
+              <button
+                type="button"
+                data-ecc="M"
+                class="ecc-btn flex flex-col items-start p-3 rounded-xl border text-left transition cursor-pointer bg-sky-500/15 border-sky-400 ring-1 ring-sky-400/40"
+              >
+                <span class="text-sm font-bold text-sky-300">M — Średni</span>
+                <span class="text-xs text-sky-200/75 mt-0.5">~15% odzysku</span>
+              </button>
+              <button
+                type="button"
+                data-ecc="Q"
+                class="ecc-btn flex flex-col items-start p-3 rounded-xl border text-left transition cursor-pointer bg-surface-950/70 border-surface-700 hover:border-slate-500"
+              >
+                <span class="text-sm font-bold text-white">Q — Wysoki</span>
+                <span class="text-xs text-slate-400 mt-0.5">~25% odzysku</span>
+              </button>
+              <button
+                type="button"
+                data-ecc="H"
+                class="ecc-btn flex flex-col items-start p-3 rounded-xl border text-left transition cursor-pointer bg-surface-950/70 border-surface-700 hover:border-slate-500"
+              >
+                <span class="text-sm font-bold text-white">H — Najwyższy</span>
+                <span class="text-xs text-slate-400 mt-0.5">~30% odzysku</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Kolory: moduły i tło -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div class="flex items-center justify-between bg-surface-950/60 border border-surface-800 rounded-xl p-3.5">
+              <div>
+                <label for="qr-fg-color" class="block text-sm font-medium text-slate-200">
+                  Kolor modułów QR
+                </label>
+                <span id="qr-fg-hex" class="text-xs font-mono text-slate-400 uppercase">#0F172A</span>
+              </div>
+              <input
+                id="qr-fg-color"
+                type="color"
+                value="#0f172a"
+                class="w-11 h-11 rounded-lg bg-transparent"
+              />
+            </div>
+
+            <div class="flex items-center justify-between bg-surface-950/60 border border-surface-800 rounded-xl p-3.5">
+              <div>
+                <label for="qr-bg-color" class="block text-sm font-medium text-slate-200">
+                  Kolor tła
+                </label>
+                <span id="qr-bg-hex" class="text-xs font-mono text-slate-400 uppercase">#FFFFFF</span>
+              </div>
+              <input
+                id="qr-bg-color"
+                type="color"
+                value="#ffffff"
+                class="w-11 h-11 rounded-lg bg-transparent"
+              />
+            </div>
+          </div>
+
+          <!-- Ostrzeżenie o kontraście kolorów (pokazywane dynamicznie) -->
+          <div id="contrast-warning" class="hidden items-center gap-2.5 text-xs text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-xl px-3.5 py-2.5">
+            <svg class="w-4 h-4 shrink-0 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+              <line x1="12" y1="9" x2="12" y2="13"></line>
+              <line x1="12" y1="17" x2="12.01" y2="17"></line>
+            </svg>
+            <span>Niski kontrast między kolorem modułów a tłem może utrudniać skanowanie kodu QR.</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Prawa kolumna: Podgląd na żywo i eksport PNG (5/12) -->
+      <aside class="lg:col-span-5 lg:sticky lg:top-6 space-y-6">
+        <div class="bg-surface-900/90 border border-surface-700/80 rounded-2xl p-5 sm:p-6 shadow-xl shadow-black/30">
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="text-sm font-semibold text-slate-200 uppercase tracking-wider">
+              Podgląd kodu QR
+            </h2>
+            <span id="qr-meta-badge" class="text-xs font-mono text-slate-400 bg-surface-850 px-2.5 py-1 rounded-lg border border-surface-700/70">
+              Wersja 1 • ECC M
+            </span>
+          </div>
+
+          <!-- Obszar renderowania Canvas -->
+          <div class="relative flex flex-col items-center justify-center min-h-[280px] rounded-2xl bg-surface-950/90 border border-surface-800 p-5 overflow-hidden">
+            <div id="canvas-wrapper" class="flex items-center justify-center transition-all duration-150">
+              <canvas
+                id="qr-canvas"
+                class="max-w-full h-auto rounded-xl shadow-2xl shadow-black/50"
+              ></canvas>
+            </div>
+
+            <!-- Stan pusty / błąd -->
+            <div id="qr-empty-state" class="hidden flex-col items-center justify-center text-center py-8 px-4">
+              <div class="w-12 h-12 rounded-2xl bg-surface-850 border border-surface-700 flex items-center justify-center text-slate-400 mb-3">
+                <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                  <rect x="3" y="3" width="7" height="7" rx="1"></rect>
+                  <rect x="14" y="3" width="7" height="7" rx="1"></rect>
+                  <rect x="3" y="14" width="7" height="7" rx="1"></rect>
+                  <path d="M14 14h7v7h-7z"></path>
+                </svg>
+              </div>
+              <p id="qr-empty-message" class="text-sm font-medium text-slate-300">
+                Wpisz link lub tekst, aby wygenerować kod QR.
+              </p>
+              <p class="text-xs text-slate-500 mt-1">
+                Kod powstaje natychmiast w Twojej przeglądarce.
+              </p>
+            </div>
+          </div>
+
+          <!-- Przyciski akcji: Pobierz PNG i Kopiuj PNG -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-5">
+            <button
+              type="button"
+              id="btn-download-png"
+              class="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-sky-500 hover:bg-sky-400 disabled:bg-surface-800 disabled:text-slate-500 disabled:cursor-not-allowed text-slate-950 font-semibold text-sm shadow-lg shadow-sky-500/20 transition cursor-pointer"
+            >
+              <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+              </svg>
+              <span>Pobierz PNG</span>
+            </button>
+
+            <button
+              type="button"
+              id="btn-copy-png"
+              class="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-surface-800 hover:bg-surface-700 disabled:bg-surface-850/60 disabled:text-slate-500 disabled:cursor-not-allowed text-slate-100 border border-surface-700 font-semibold text-sm transition cursor-pointer"
+            >
+              <svg class="w-4 h-4 shrink-0 text-sky-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+              </svg>
+              <span id="copy-btn-label">Kopiuj obraz PNG</span>
+            </button>
+          </div>
+
+          <!-- Pasek statusu / komunikatów (zamiast alert()) -->
+          <div id="status-banner" class="hidden mt-3.5 rounded-xl px-3.5 py-2.5 text-xs font-medium border transition-all"></div>
+        </div>
+
+        <!-- Informacja o prywatności i lokalnym działaniu -->
+        <div class="bg-surface-900/60 border border-surface-800 rounded-2xl p-4 text-xs text-slate-400 space-y-1.5">
+          <p class="font-semibold text-slate-300">
+            Dlaczego ten generator nie ma limitów?
+          </p>
+          <p>
+            Cały algorytm kodowania macierzy QR (wersje 1–10, korekcja Reed-Solomon GF(256), wybór maski i renderowanie na <code class="text-slate-300 font-mono">Canvas</code>) wykonuje się bezpośrednio na Twoim urządzeniu. Żaden link ani kod nie trafia na zewnętrzny serwer.
+          </p>
+        </div>
+      </aside>
+    </main>
+  </div>
+
+  <script>
+    /**
+     * =========================================================================
+     * CZYSTY ENKODER MACIERZY QR W JAVASCRIPT (WERSJE 1–10, TRYB BAJTOWY UTF-8)
+     * Implementacja oparta o standard ISO/IEC 18004:
+     * - Arytmetyka ciała Galois GF(256) z wielomianem pierwotnym 0x11D (285)
+     * - Generowanie wielomianów korekcji błędów Reed-Solomon
+     * - Wzorce wyszukiwania (Finder), wyrównania (Alignment), taktowania (Timing)
+     * - 8 masek oceny kary (penalty score) i wybór optymalnej maski
+     * =========================================================================
+     */
+    const LocalQRCode = (() => {
+      // Poziomy korekcji błędów i ich kody formatu (L: 01, M: 00, Q: 11, H: 10)
+      const ECC_CONFIG = {
+        L: { code: 1, formatBits: 0b01, label: 'L' },
+        M: { code: 0, formatBits: 0b00, label: 'M' },
+        Q: { code: 3, formatBits: 0b11, label: 'Q' },
+        H: { code: 2, formatBits: 0b10, label: 'H' },
+      };
+
+      // Tablice całkowitych kodów korekcji błędów na blok [wersja 1..10][L, M, Q, H]
+      const EC_CODEWORDS_PER_BLOCK = [
+        null,
+        [7, 10, 13, 17],
+        [10, 16, 22, 28],
+        [15, 26, 18, 22],
+        [20, 18, 26, 16],
+        [26, 24, 18, 22],
+        [18, 16, 24, 28],
+        [20, 18, 18, 26],
+        [24, 22, 22, 26],
+        [30, 22, 20, 24],
+        [18, 26, 24, 28],
+      ];
+
+      // Liczba bloków korekcji błędów [wersja 1..10][L, M, Q, H]
+      const NUM_ERROR_CORRECTION_BLOCKS = [
+        null,
+        [1, 1, 1, 1],
+        [1, 1, 1, 1],
+        [1, 1, 2, 2],
+        [1, 2, 2, 4],
+        [1, 2, 4, 4],
+        [2, 4, 4, 4],
+        [2, 4, 6, 5],
+        [2, 4, 6, 6],
+        [2, 5, 8, 8],
+        [4, 5, 8, 8],
+      ];
+
+      // Całkowita liczba bajtów danych (codewords) dla wersji 1..10
+      const TOTAL_DATA_CODEWORDS = [
+        null,
+        26, 44, 70, 100, 134, 172, 196, 242, 292, 346,
+      ];
+
+      // Pozycje środków wzorców wyrównania (Alignment Patterns) dla wersji 2..10
+      const ALIGNMENT_PATTERN_CENTERS = [
+        null,
+        [],
+        [6, 18],
+        [6, 22],
+        [6, 26],
+        [6, 30],
+        [6, 34],
+        [6, 22, 38],
+        [6, 24, 42],
+        [6, 26, 46],
+        [6, 28, 50],
+      ];
+
+      // Tablice wykładników i logarytmów w ciele GF(256)
+      const GF_EXP = new Uint8Array(512);
+      const GF_LOG = new Uint8Array(256);
+
+      (function initGaloisField() {
+        let x = 1;
+        for (let i = 0; i < 255; i++) {
+          GF_EXP[i] = x;
+          GF_LOG[x] = i;
+          x <<= 1;
+          if (x & 0x100) {
+            x ^= 0x11d; // Wielomian pierwotny x^8 + x^4 + x^3 + x^2 + 1
+          }
+        }
+        for (let i = 255; i < 512; i++) {
+          GF_EXP[i] = GF_EXP[i - 255];
+        }
+      })();
+
+      /**
+       * Mnożenie w ciele GF(256).
+       */
+      function gfMul(a, b) {
+        if (a === 0 || b === 0) return 0;
+        return GF_EXP[(GF_LOG[a] + GF_LOG[b]) % 255];
+      }
+
+      /**
+       * Buduje wielomian generatora Reed-Solomon o stopniu `degree`.
+       */
+      function buildGeneratorPoly(degree) {
+        let poly = [1];
+        for (let i = 0; i < degree; i++) {
+          const next = new Array(poly.length + 1).fill(0);
+          const factor = GF_EXP[i];
+          for (let j = 0; j < poly.length; j++) {
+            next[j] ^= poly[j];
+            next[j + 1] ^= gfMul(poly[j], factor);
+          }
+          poly = next;
+        }
+        return poly;
+      }
+
+      /**
+       * Oblicza bajty korekcji błędów Reed-Solomon dla pojedynczego bloku danych.
+       */
+      function computeECCBlock(dataBytes, ecCount) {
+        const gen = buildGeneratorPoly(ecCount);
+        const ecc = new Array(ecCount).fill(0);
+
+        for (let i = 0; i < dataBytes.length; i++) {
+          const factor = dataBytes[i] ^ ecc[0];
+          ecc.shift();
+          ecc.push(0);
+
+          for (let j = 0; j < ecCount; j++) {
+            ecc[j] ^= gfMul(gen[j + 1], factor);
+          }
+        }
+        return ecc;
+      }
+
+      /**
+       * Wyznacza maksymalną pojemność bajtów (UTF-8) dla danej wersji i poziomu ECC.
+       */
+      function getMaxByteCapacity(version, eccLevel) {
+        const eccIndex = ['L', 'M', 'Q', 'H'].indexOf(eccLevel);
+        const totalCodewords = TOTAL_DATA_CODEWORDS[version];
+        const blocks = NUM_ERROR_CORRECTION_BLOCKS[version][eccIndex];
+        const ecPerBlock = EC_CODEWORDS_PER_BLOCK[version][eccIndex];
+        const totalDataCodewords = totalCodewords - blocks * ecPerBlock;
+
+        // Nagłówek: 4 bity trybu (0100 = Byte) + liczba bitów długości (8 bitów dla wersji 1..9, 16 bitów dla >=10)
+        const countBits = version <= 9 ? 8 : 16;
+        const headerBits = 4 + countBits;
+        const availableDataBits = totalDataCodewords * 8 - headerBits;
+        return Math.max(0, Math.floor(availableDataBits / 8));
+      }
+
+      /**
+       * Dobiera najmniejszą wersję QR (1..10), która zmieści podane bajty UTF-8.
+       */
+      function selectVersion(utf8Bytes, eccLevel) {
+        for (let version = 1; version <= 10; version++) {
+          if (utf8Bytes.length <= getMaxByteCapacity(version, eccLevel)) {
+            return version;
+          }
+        }
+        return null;
+      }
+
+      /**
+       * Buduje strumień bajtów danych oraz przeplata bloki danych i korekcji błędów.
+       */
+      function buildInterleavedCodewords(utf8Bytes, version, eccLevel) {
+        const eccIndex = ['L', 'M', 'Q', 'H'].indexOf(eccLevel);
+        const totalCodewords = TOTAL_DATA_CODEWORDS[version];
+        const numBlocks = NUM_ERROR_CORRECTION_BLOCKS[version][eccIndex];
+        const ecPerBlock = EC_CODEWORDS_PER_BLOCK[version][eccIndex];
+        const totalDataCodewords = totalCodewords - numBlocks * ecPerBlock;
+
+        // Zapis strumienia bitowego
+        const bits = [];
+        const pushBits = (val, length) => {
+          for (let i = length - 1; i >= 0; i--) {
+            bits.push((val >>> i) & 1);
+          }
+        };
+
+        // Tryb Byte (0100)
+        pushBits(0b0100, 4);
+
+        // Liczba bajtów wiadomości
+        const countBits = version <= 9 ? 8 : 16;
+        pushBits(utf8Bytes.length, countBits);
+
+        // Bajty UTF-8
+        for (let i = 0; i < utf8Bytes.length; i++) {
+          pushBits(utf8Bytes[i], 8);
+        }
+
+        // Terminator (do 4 zerowych bitów)
+        const maxDataBits = totalDataCodewords * 8;
+        const terminatorLen = Math.min(4, Math.max(0, maxDataBits - bits.length));
+        pushBits(0, terminatorLen);
+
+        // Wyrównanie do pełnego bajtu
+        while (bits.length % 8 !== 0 && bits.length < maxDataBits) {
+          bits.push(0);
+        }
+
+        // Zamiana bitów na bajty danych
+        const dataCodewords = [];
+        for (let i = 0; i < bits.length; i += 8) {
+          let byte = 0;
+          for (let b = 0; b < 8; b++) {
+            byte = (byte << 1) | (bits[i + b] || 0);
+          }
+          dataCodewords.push(byte);
+        }
+
+        // Bajty wypełniające (pad codewords): 0xEC (236) i 0x11 (17) na przemian
+        const padBytes = [0xec, 0x11];
+        let padIdx = 0;
+        while (dataCodewords.length < totalDataCodewords) {
+          dataCodewords.push(padBytes[padIdx % 2]);
+          padIdx++;
+        }
+
+        // Podział na bloki (część bloków może mieć o 1 bajt danych więcej)
+        const shortBlockLen = Math.floor(totalDataCodewords / numBlocks);
+        const longBlockCount = totalDataCodewords % numBlocks;
+
+        const dataBlocks = [];
+        const eccBlocks = [];
+        let offset = 0;
+
+        for (let b = 0; b < numBlocks; b++) {
+          const len = shortBlockLen + (b >= numBlocks - longBlockCount ? 1 : 0);
+          const block = dataCodewords.slice(offset, offset + len);
+          offset += len;
+          dataBlocks.push(block);
+          eccBlocks.push(computeECCBlock(block, ecPerBlock));
+        }
+
+        // Przeplatanie bajtów danych
+        const result = [];
+        const maxDataBlockLen = shortBlockLen + (longBlockCount > 0 ? 1 : 0);
+        for (let i = 0; i < maxDataBlockLen; i++) {
+          for (let b = 0; b < numBlocks; b++) {
+            if (i < dataBlocks[b].length) {
+              result.push(dataBlocks[b][i]);
+            }
+          }
+        }
+
+        // Przeplatanie bajtów korekcji błędów
+        for (let i = 0; i < ecPerBlock; i++) {
+          for (let b = 0; b < numBlocks; b++) {
+            result.push(eccBlocks[b][i]);
+          }
+        }
+
+        // Dodatkowe bity reszty (remainder bits) — dla wersji 1..10 wynosi 0 (lub 7 dla v2..v6; standard określa zera po bajtach)
+        return result;
+      }
+
+      /**
+       * Tworzy pustą macierz rozmiaru `size x size` oraz tablicę rezerwacji wzorców funkcyjnych.
+       */
+      function createBaseMatrix(version) {
+        const size = version * 4 + 17;
+        const matrix = Array.from({ length: size }, () => new Array(size).fill(false));
+        const reserved = Array.from({ length: size }, () => new Array(size).fill(false));
+
+        const setModule = (r, c, val, markReserved = true) => {
+          if (r >= 0 && r < size && c >= 0 && c < size) {
+            matrix[r][c] = Boolean(val);
+            if (markReserved) reserved[r][c] = true;
+          }
+        };
+
+        // Wzorce wyszukiwania (Finder Patterns) 7x7 + separator 1px
+        const drawFinder = (topR, leftC) => {
+          for (let r = -1; r <= 7; r++) {
+            for (let c = -1; c <= 7; c++) {
+              const rr = topR + r;
+              const cc = leftC + c;
+              if (rr < 0 || rr >= size || cc < 0 || cc >= size) continue;
+
+              const inBorder = r === -1 || r === 7 || c === -1 || c === 7;
+              const isOuterRing = r === 0 || r === 6 || c === 0 || c === 6;
+              const isCenterBox = r >= 2 && r <= 4 && c >= 2 && c <= 4;
+              const dark = !inBorder && (isOuterRing || isCenterBox);
+              setModule(rr, cc, dark, true);
+            }
+          }
+        };
+
+        drawFinder(0, 0);
+        drawFinder(0, size - 7);
+        drawFinder(size - 7, 0);
+
+        // Wzorce wyrównania (Alignment Patterns)
+        const centers = ALIGNMENT_PATTERN_CENTERS[version] || [];
+        for (let i = 0; i < centers.length; i++) {
+          for (let j = 0; j < centers.length; j++) {
+            const cr = centers[i];
+            const cc = centers[j];
+            // Pomijamy nakładanie się na wzorce wyszukiwania
+            if (
+              (cr <= 8 && cc <= 8) ||
+              (cr <= 8 && cc >= size - 9) ||
+              (cr >= size - 9 && cc <= 8)
+            ) {
+              continue;
+            }
+            for (let dr = -2; dr <= 2; dr++) {
+              for (let dc = -2; dc <= 2; dc++) {
+                const dist = Math.max(Math.abs(dr), Math.abs(dc));
+                setModule(cr + dr, cc + dc, dist === 0 || dist === 2, true);
+              }
+            }
+          }
+        }
+
+        // Wzorce taktowania (Timing Patterns) w wierszu 6 i kolumnie 6
+        for (let i = 8; i < size - 8; i++) {
+          const dark = i % 2 === 0;
+          if (!reserved[6][i]) setModule(6, i, dark, true);
+          if (!reserved[i][6]) setModule(i, 6, dark, true);
+        }
+
+        // Ciemny moduł stały (Dark Module)
+        setModule(size - 8, 8, true, true);
+
+        // Informacja o wersji (BCH 18,6) — wymagana dla wersji >= 7
+        if (version >= 7) {
+          let rem = version;
+          for (let i = 0; i < 12; i++) rem = (rem << 1) ^ ((rem >>> 11) * 0x1f25);
+          const vbits = (version << 12) | rem;
+          for (let i = 0; i < 18; i++) {
+            const bit = ((vbits >>> i) & 1) === 1;
+            const a = size - 11 + (i % 3);
+            const b = Math.floor(i / 3);
+            setModule(b, a, bit, true);
+            setModule(a, b, bit, true);
+          }
+        }
+
+        // Rezerwacja miejsc na informacje o formacie (wokół wzorców wyszukiwania)
+        for (let i = 0; i < 9; i++) {
+          if (i < size) {
+            reserved[8][i] = true;
+            reserved[i][8] = true;
+          }
+        }
+        for (let i = 0; i < 8; i++) {
+          reserved[8][size - 1 - i] = true;
+          reserved[size - 1 - i][8] = true;
+        }
+
+        return { matrix, reserved, size };
+      }
+
+      /**
+       * Wpisuje przeplecione bajty danych do macierzy zygzakiem od prawego dołu.
+       */
+      function placeDataBits(matrix, reserved, size, codewords) {
+        const totalBits = [];
+        for (let i = 0; i < codewords.length; i++) {
+          for (let b = 7; b >= 0; b--) {
+            totalBits.push((codewords[i] >>> b) & 1);
+          }
+        }
+
+        let bitIdx = 0;
+        let dirUp = true;
+
+        for (let col = size - 1; col > 0; col -= 2) {
+          // Kolumna 6 to timing pattern — przeskakujemy ją
+          if (col === 6) col = 5;
+
+          for (let count = 0; count < size; count++) {
+            const row = dirUp ? size - 1 - count : count;
+
+            for (let cOffset = 0; cOffset < 2; cOffset++) {
+              const c = col - cOffset;
+              if (!reserved[row][c]) {
+                const bit = bitIdx < totalBits.length ? totalBits[bitIdx] : 0;
+                matrix[row][c] = bit === 1;
+                bitIdx++;
+              }
+            }
+          }
+          dirUp = !dirUp;
+        }
+      }
+
+      /**
+       * Sprawdza, czy moduł (r, c) podlega masce o numerze `maskId` (0..7).
+       */
+      function shouldInvertByMask(maskId, r, c) {
+        switch (maskId) {
+          case 0:
+            return (r + c) % 2 === 0;
+          case 1:
+            return r % 2 === 0;
+          case 2:
+            return c % 3 === 0;
+          case 3:
+            return (r + c) % 3 === 0;
+          case 4:
+            return (Math.floor(r / 2) + Math.floor(c / 3)) % 2 === 0;
+          case 5:
+            return ((r * c) % 2) + ((r * c) % 3) === 0;
+          case 6:
+            return (((r * c) % 2) + ((r * c) % 3)) % 2 === 0;
+          case 7:
+            return (((r + c) % 2) + ((r * c) % 3)) % 2 === 0;
+          default:
+            return false;
+        }
+      }
+
+      /**
+       * Oblicza 15-bitowe słowo formatu wraz z kodowaniem BCH (10 bitów korekcji) i maską formatu 0x5412.
+       */
+      function computeFormatBits(eccLevel, maskId) {
+        const formatBits = ECC_CONFIG[eccLevel].formatBits;
+        const data = ((formatBits << 3) | maskId) & 0x1f;
+        let rem = data << 10;
+        const poly = 0x537; // x^10 + x^8 + x^5 + x^4 + x^2 + x + 1
+
+        for (let i = 14; i >= 10; i--) {
+          if ((rem >>> i) & 1) {
+            rem ^= poly << (i - 10);
+          }
+        }
+
+        const unmasked = (data << 10) | (rem & 0x3ff);
+        return (unmasked ^ 0x5412) & 0x7fff;
+      }
+
+      /**
+       * Nakłada bity formatu na macierz.
+       */
+      function applyFormatInformation(matrix, size, eccLevel, maskId) {
+        const bits = computeFormatBits(eccLevel, maskId);
+        const getBit = (i) => ((bits >>> i) & 1) === 1; // i = 0 to najmłodszy bit
+
+        // Pierwsza kopia wokół lewego-górnego wzorca wyszukiwania
+        for (let i = 0; i <= 5; i++) matrix[i][8] = getBit(i);
+        matrix[7][8] = getBit(6);
+        matrix[8][8] = getBit(7);
+        matrix[8][7] = getBit(8);
+        for (let i = 9; i < 15; i++) matrix[8][14 - i] = getBit(i);
+
+        // Druga kopia (prawy-górny i lewy-dolny róg)
+        for (let i = 0; i < 8; i++) matrix[8][size - 1 - i] = getBit(i);
+        for (let i = 8; i < 15; i++) matrix[size - 15 + i][8] = getBit(i);
+        matrix[size - 8][8] = true; // stały ciemny moduł
+      }
+
+      /**
+       * Ocenia karę za niepożądane wzorce w zamaskowanej macierzy (im mniej punktów kary, tym lepiej).
+       */
+      function calculatePenaltyScore(matrix, size) {
+        let penalty = 0;
+
+        // Warunek 1: kolejne moduły tego samego koloru w wierszu lub kolumnie (>= 5)
+        for (let r = 0; r < size; r++) {
+          let run = 1;
+          for (let c = 1; c < size; c++) {
+            if (matrix[r][c] === matrix[r][c - 1]) {
+              run++;
+            } else {
+              if (run >= 5) penalty += 3 + (run - 5);
+              run = 1;
+            }
+          }
+          if (run >= 5) penalty += 3 + (run - 5);
+        }
+
+        for (let c = 0; c < size; c++) {
+          let run = 1;
+          for (let r = 1; r < size; r++) {
+            if (matrix[r][c] === matrix[r - 1][c]) {
+              run++;
+            } else {
+              if (run >= 5) penalty += 3 + (run - 5);
+              run = 1;
+            }
+          }
+          if (run >= 5) penalty += 3 + (run - 5);
+        }
+
+        // Warunek 2: bloki 2x2 tego samego koloru
+        for (let r = 0; r < size - 1; r++) {
+          for (let c = 0; c < size - 1; c++) {
+            const val = matrix[r][c];
+            if (
+              val === matrix[r][c + 1] &&
+              val === matrix[r + 1][c] &&
+              val === matrix[r + 1][c + 1]
+            ) {
+              penalty += 3;
+            }
+          }
+        }
+
+        // Warunek 3: wzorzec 1:1:3:1:1 (ciemny-jasny-ciemny-ciemny-ciemny-jasny-ciemny)
+        const patternA = [true, false, true, true, true, false, true];
+        const patternB = [false, false, false, false, true, false, true];
+        const patternC = [true, false, true, true, true, false, false, false, false];
+
+        const matchesSequence = (arr, start, seq) => {
+          for (let k = 0; k < seq.length; k++) {
+            if (arr[start + k] !== seq[k]) return false;
+          }
+          return true;
+        };
+
+        for (let r = 0; r < size; r++) {
+          const rowArr = matrix[r];
+          for (let c = 0; c <= size - 7; c++) {
+            if (matchesSequence(rowArr, c, patternA)) {
+              const before4 = c >= 4 && matchesSequence(rowArr, c - 4, [false, false, false, false]);
+              const after4 = c + 7 <= size - 4 && matchesSequence(rowArr, c + 7, [false, false, false, false]);
+              if (before4 || after4) {
+                penalty += 40;
+              }
+            }
+          }
+        }
+
+        for (let c = 0; c < size; c++) {
+          const colArr = [];
+          for (let r = 0; r < size; r++) colArr.push(matrix[r][c]);
+          for (let r = 0; r <= size - 7; r++) {
+            if (matchesSequence(colArr, r, patternA)) {
+              const before4 = r >= 4 && matchesSequence(colArr, r - 4, [false, false, false, false]);
+              const after4 = r + 7 <= size - 4 && matchesSequence(colArr, r + 7, [false, false, false, false]);
+              if (before4 || after4) {
+                penalty += 40;
+              }
+            }
+          }
+        }
+
+        // Warunek 4: udział ciemnych modułów względem całości
+        let darkCount = 0;
+        const total = size * size;
+        for (let r = 0; r < size; r++) {
+          for (let c = 0; c < size; c++) {
+            if (matrix[r][c]) darkCount++;
+          }
+        }
+        const darkPercent = (darkCount * 100) / total;
+        const prev5 = Math.floor(Math.abs(darkPercent - 50) / 5);
+        penalty += prev5 * 10;
+
+        return penalty;
+      }
+
+      /**
+       * Główna funkcja generująca macierz QR dla podanego tekstu/URL i poziomu ECC.
+       */
+      function generate(text, eccLevel = 'M') {
+        const safeEcc = ECC_CONFIG[eccLevel] ? eccLevel : 'M';
+        const encoder = new TextEncoder();
+        const utf8Bytes = encoder.encode(text);
+
+        if (utf8Bytes.length === 0) {
+          throw new Error('Brak treści do zakodowania.');
+        }
+
+        const version = selectVersion(utf8Bytes, safeEcc);
+        if (!version) {
+          throw new Error(
+            'Tekst jest zbyt długi dla obsługiwanych wersji QR (1–10) przy wybranym poziomie korekcji błędów. Skróć tekst lub wybierz niższy poziom ECC.'
+          );
+        }
+
+        const codewords = buildInterleavedCodewords(utf8Bytes, version, safeEcc);
+        const { matrix: baseMatrix, reserved, size } = createBaseMatrix(version);
+        placeDataBits(baseMatrix, reserved, size, codewords);
+
+        let bestMatrix = null;
+        let bestMask = 0;
+        let lowestPenalty = Infinity;
+
+        for (let maskId = 0; maskId < 8; maskId++) {
+          const candidate = baseMatrix.map((row) => row.slice());
+          for (let r = 0; r < size; r++) {
+            for (let c = 0; c < size; c++) {
+              if (!reserved[r][c] && shouldInvertByMask(maskId, r, c)) {
+                candidate[r][c] = !candidate[r][c];
+              }
+            }
+          }
+          applyFormatInformation(candidate, size, safeEcc, maskId);
+
+          const score = calculatePenaltyScore(candidate, size);
+          if (score < lowestPenalty) {
+            lowestPenalty = score;
+            bestMatrix = candidate;
+            bestMask = maskId;
+          }
+        }
+
+        return {
+          matrix: bestMatrix,
+          size,
+          version,
+          eccLevel: safeEcc,
+          maskId: bestMask,
+          byteLength: utf8Bytes.length,
+        };
+      }
+
+      return { generate, getMaxByteCapacity };
+    })();
+
+    /**
+     * =========================================================================
+     * LOGIKA INTERFEJSU, WALIDACJI URL, RENDEROWANIA CANVAS I EKSPORTU PNG
+     * =========================================================================
+     */
+    (function initApp() {
+      const DEFAULTS = {
+        text: 'https://example.com',
+        size: 320,
+        margin: 4,
+        ecc: 'M',
+        fgColor: '#0f172a',
+        bgColor: '#ffffff',
+      };
+
+      const state = { ...DEFAULTS };
+
+      // Elementy DOM
+      const inputEl = document.getElementById('qr-input');
+      const charCounterEl = document.getElementById('char-counter');
+      const urlStatusTextEl = document.getElementById('url-status-text');
+      const btnAddHttpsEl = document.getElementById('btn-add-https');
+      const btnClearInputEl = document.getElementById('btn-clear-input');
+      const sampleButtons = document.querySelectorAll('.sample-btn');
+
+      const sizeInputEl = document.getElementById('qr-size');
+      const sizeValueEl = document.getElementById('qr-size-value');
+      const marginInputEl = document.getElementById('qr-margin');
+      const marginValueEl = document.getElementById('qr-margin-value');
+      const eccButtons = document.querySelectorAll('.ecc-btn');
+      const fgColorEl = document.getElementById('qr-fg-color');
+      const bgColorEl = document.getElementById('qr-bg-color');
+      const fgHexEl = document.getElementById('qr-fg-hex');
+      const bgHexEl = document.getElementById('qr-bg-hex');
+      const contrastWarningEl = document.getElementById('contrast-warning');
+      const btnResetDefaultsEl = document.getElementById('btn-reset-defaults');
+
+      const canvasEl = document.getElementById('qr-canvas');
+      const canvasWrapperEl = document.getElementById('canvas-wrapper');
+      const emptyStateEl = document.getElementById('qr-empty-state');
+      const emptyMessageEl = document.getElementById('qr-empty-message');
+      const metaBadgeEl = document.getElementById('qr-meta-badge');
+      const btnDownloadPngEl = document.getElementById('btn-download-png');
+      const btnCopyPngEl = document.getElementById('btn-copy-png');
+      const copyBtnLabelEl = document.getElementById('copy-btn-label');
+      const statusBannerEl = document.getElementById('status-banner');
+
+      let statusTimeout = null;
+      let hasValidQR = false;
+
+      /**
+       * Wyświetla krótki komunikat statusu zamiast okna alert().
+       */
+      function showStatus(message, type = 'info') {
+        if (statusTimeout) {
+          clearTimeout(statusTimeout);
+        }
+
+        const styles = {
+          info: 'bg-sky-500/10 text-sky-300 border-sky-500/30',
+          success: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30',
+          error: 'bg-rose-500/10 text-rose-300 border-rose-500/30',
+        };
+
+        statusBannerEl.className = `mt-3.5 rounded-xl px-3.5 py-2.5 text-xs font-medium border transition-all ${styles[type] || styles.info}`;
+        statusBannerEl.textContent = message;
+        statusBannerEl.classList.remove('hidden');
+
+        statusTimeout = setTimeout(() => {
+          statusBannerEl.classList.add('hidden');
+        }, 4200);
+      }
+
+      /**
+       * Oblicza względną luminancję koloru HEX (#RRGGBB) do oceny kontrastu.
+       */
+      function getRelativeLuminance(hex) {
+        const clean = hex.replace('#', '');
+        if (clean.length !== 6) return 0.5;
+        const channels = [0, 2, 4].map((idx) => {
+          const c = parseInt(clean.slice(idx, idx + 2), 16) / 255;
+          return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+        });
+        return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
+      }
+
+      function checkColorContrast(fgHex, bgHex) {
+        const l1 = getRelativeLuminance(fgHex);
+        const l2 = getRelativeLuminance(bgHex);
+        const lighter = Math.max(l1, l2);
+        const darker = Math.min(l1, l2);
+        const ratio = (lighter + 0.05) / (darker + 0.05);
+        // Standard zaleca minimum ~3:1 dla kodów QR / grafiki
+        contrastWarningEl.classList.toggle('hidden', ratio >= 3);
+        contrastWarningEl.classList.toggle('flex', ratio < 3);
+      }
+
+      /**
+       * Analizuje wpisany ciąg znaków pod kątem poprawności linku / formatu URL.
+       */
+      function analyzeInput(rawValue) {
+        const trimmed = rawValue.trim();
+        charCounterEl.textContent = `${rawValue.length} ${rawValue.length === 1 ? 'znak' : 'znaków'}`;
+
+        if (!trimmed) {
+          btnAddHttpsEl.classList.add('hidden');
+          urlStatusTextEl.innerHTML = `<span class="inline-block w-2 h-2 rounded-full bg-slate-500"></span><span>Pole jest puste — wpisz link lub dowolny tekst.</span>`;
+          return { normalizedForCheck: '', isUrl: false, needsHttps: false };
+        }
+
+        // Jeśli wygląda jak domena bez protokołu (np. example.com, sub.domena.pl/sciezka)
+        const looksLikeDomainWithoutScheme =
+          !/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(trimmed) &&
+          !trimmed.includes(' ') &&
+          /^[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)+([/?#].*)?$/.test(trimmed);
+
+        if (looksLikeDomainWithoutScheme) {
+          btnAddHttpsEl.classList.remove('hidden');
+          urlStatusTextEl.innerHTML = `<span class="inline-block w-2 h-2 rounded-full bg-amber-400"></span><span>Wygląda jak link bez protokołu — możesz dodać <code class="font-mono text-amber-200">https://</code> lub zakodować dokładnie tak jak jest.</span>`;
+          return { normalizedForCheck: 'https://' + trimmed, isUrl: false, needsHttps: true };
+        }
+
+        btnAddHttpsEl.classList.add('hidden');
+
+        // Próba sparsowania jako pełny URL
+        try {
+          const parsed = new URL(trimmed);
+          const allowedProtocols = ['http:', 'https:', 'mailto:', 'tel:', 'sms:'];
+          if (allowedProtocols.includes(parsed.protocol)) {
+            urlStatusTextEl.innerHTML = `<span class="inline-block w-2 h-2 rounded-full bg-emerald-400"></span><span>Poprawny link (<code class="font-mono text-emerald-300">${parsed.protocol}</code>) — gotowy do skanowania.</span>`;
+            return { normalizedForCheck: trimmed, isUrl: true, needsHttps: false };
+          }
+        } catch (_) {
+          // Nie jest pełnym URL — może to być zwykły tekst, kod Wi-Fi itp.
+        }
+
+        urlStatusTextEl.innerHTML = `<span class="inline-block w-2 h-2 rounded-full bg-sky-400"></span><span>Tekst niestandardowy — zostanie zakodowany dosłownie w kodzie QR.</span>`;
+        return { normalizedForCheck: trimmed, isUrl: false, needsHttps: false };
+      }
+
+      /**
+       * Aktualizuje aktywny przycisk poziomu korekcji błędów (ECC).
+       */
+      function syncEccButtons() {
+        eccButtons.forEach((btn) => {
+          const isActive = btn.dataset.ecc === state.ecc;
+          btn.className = isActive
+            ? 'ecc-btn flex flex-col items-start p-3 rounded-xl border text-left transition cursor-pointer bg-sky-500/15 border-sky-400 ring-1 ring-sky-400/40'
+            : 'ecc-btn flex flex-col items-start p-3 rounded-xl border text-left transition cursor-pointer bg-surface-950/70 border-surface-700 hover:border-slate-500';
+
+          const titleEl = btn.querySelector('span:first-child');
+          const subEl = btn.querySelector('span:last-child');
+          if (titleEl) {
+            titleEl.className = isActive ? 'text-sm font-bold text-sky-300' : 'text-sm font-bold text-white';
+          }
+          if (subEl) {
+            subEl.className = isActive ? 'text-xs text-sky-200/75 mt-0.5' : 'text-xs text-slate-400 mt-0.5';
+          }
+        });
+      }
+
+      /**
+       * Renderuje kod QR na elemencie <canvas> w żądanym rozmiarze i z marginesem.
+       */
+      function renderQRCode() {
+        checkColorContrast(state.fgColor, state.bgColor);
+        analyzeInput(state.text);
+
+        sizeValueEl.textContent = `${state.size} px`;
+        marginValueEl.textContent = `${state.margin} mod.`;
+        fgHexEl.textContent = state.fgColor.toUpperCase();
+        bgHexEl.textContent = state.bgColor.toUpperCase();
+        syncEccButtons();
+
+        if (!state.text || state.text.length === 0) {
+          hasValidQR = false;
+          canvasWrapperEl.classList.add('hidden');
+          emptyStateEl.classList.remove('hidden');
+          emptyStateEl.classList.add('flex');
+          emptyMessageEl.textContent = 'Wpisz link lub tekst, aby wygenerować kod QR.';
+          metaBadgeEl.textContent = `Brak treści • ECC ${state.ecc}`;
+          btnDownloadPngEl.disabled = true;
+          btnCopyPngEl.disabled = true;
+          return;
+        }
+
+        try {
+          const qr = LocalQRCode.generate(state.text, state.ecc);
+          const totalModules = qr.size + state.margin * 2;
+          const pixelSize = state.size;
+
+          canvasEl.width = pixelSize;
+          canvasEl.height = pixelSize;
+
+          const ctx = canvasEl.getContext('2d');
+          if (!ctx) {
+            throw new Error('Nie udało się uzyskać kontekstu graficznego 2D dla Canvas.');
+          }
+
+          // Tło całego obrazu (w tym marginesu quiet zone)
+          ctx.fillStyle = state.bgColor;
+          ctx.fillRect(0, 0, pixelSize, pixelSize);
+
+          // Rysowanie modułów QR z zaokrągleniem do pikseli aby uniknąć artefaktów
+          const moduleSize = pixelSize / totalModules;
+          ctx.fillStyle = state.fgColor;
+
+          for (let r = 0; r < qr.size; r++) {
+            for (let c = 0; c < qr.size; c++) {
+              if (qr.matrix[r][c]) {
+                const x = Math.floor((c + state.margin) * moduleSize);
+                const y = Math.floor((r + state.margin) * moduleSize);
+                const nextX = Math.floor((c + state.margin + 1) * moduleSize);
+                const nextY = Math.floor((r + state.margin + 1) * moduleSize);
+                const w = Math.max(1, nextX - x);
+                const h = Math.max(1, nextY - y);
+                ctx.fillRect(x, y, w, h);
+              }
+            }
+          }
+
+          hasValidQR = true;
+          canvasWrapperEl.classList.remove('hidden');
+          emptyStateEl.classList.add('hidden');
+          emptyStateEl.classList.remove('flex');
+          metaBadgeEl.textContent = `Wersja ${qr.version} (${qr.size}×${qr.size}) • ECC ${qr.eccLevel}`;
+          btnDownloadPngEl.disabled = false;
+          btnCopyPngEl.disabled = false;
+        } catch (err) {
+          hasValidQR = false;
+          canvasWrapperEl.classList.add('hidden');
+          emptyStateEl.classList.remove('hidden');
+          emptyStateEl.classList.add('flex');
+          emptyMessageEl.textContent = err && err.message ? err.message : 'Nie udało się wygenerować kodu QR.';
+          metaBadgeEl.textContent = `Limit pojemności • ECC ${state.ecc}`;
+          btnDownloadPngEl.disabled = true;
+          btnCopyPngEl.disabled = true;
+        }
+      }
+
+      /**
+       * Tworzy bezpieczną nazwę pliku PNG na podstawie treści.
+       */
+      function buildFileName() {
+        const cleaned = state.text
+          .trim()
+          .replace(/^https?:\/\//i, '')
+          .replace(/[^a-zA-Z0-9._-]+/g, '-')
+          .replace(/^-+|-+$/g, '')
+          .slice(0, 32);
+        return `kod-qr-${cleaned || 'link'}-${state.size}px.png`;
+      }
+
+      /**
+       * Pobiera wygenerowany kod QR jako plik PNG.
+       */
+      function handleDownloadPng() {
+        if (!hasValidQR) return;
+        try {
+          const dataUrl = canvasEl.toDataURL('image/png');
+          const link = document.createElement('a');
+          link.download = buildFileName();
+          link.href = dataUrl;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          showStatus(`Pobrano plik ${link.download}`, 'success');
+        } catch (err) {
+          showStatus('Nie udało się wyeksportować pliku PNG.', 'error');
+        }
+      }
+
+      /**
+       * Kopiuje obraz PNG ze schowka przeglądarki, z awaryjnym fallbackiem.
+       */
+      async function handleCopyPng() {
+        if (!hasValidQR) return;
+
+        // Nowoczesne Clipboard API z obsługą image/png
+        if (navigator.clipboard && typeof window.ClipboardItem === 'function') {
+          try {
+            const blob = await new Promise((resolve, reject) => {
+              canvasEl.toBlob((b) => {
+                if (b) resolve(b);
+                else reject(new Error('Brak blob PNG'));
+              }, 'image/png');
+            });
+
+            await navigator.clipboard.write([
+              new ClipboardItem({ 'image/png': blob }),
+            ]);
+
+            copyBtnLabelEl.textContent = 'Skopiowano PNG!';
+            showStatus('Obraz PNG skopiowano do schowka. Możesz go wkleić (Ctrl+V / Cmd+V).', 'success');
+            setTimeout(() => {
+              copyBtnLabelEl.textContent = 'Kopiuj obraz PNG';
+            }, 2000);
+            return;
+          } catch (clipboardErr) {
+            // Przejście do fallbacku poniżej
+          }
+        }
+
+        // Fallback: kopiowanie Data URL PNG jako tekstu przez execCommand('copy')
+        try {
+          const dataUrl = canvasEl.toDataURL('image/png');
+          const tempTextarea = document.createElement('textarea');
+          tempTextarea.value = dataUrl;
+          tempTextarea.setAttribute('readonly', '');
+          tempTextarea.style.position = 'fixed';
+          tempTextarea.style.opacity = '0';
+          document.body.appendChild(tempTextarea);
+          tempTextarea.select();
+          document.execCommand('copy');
+          document.body.removeChild(tempTextarea);
+
+          showStatus(
+            'Bezpośrednie kopiowanie obrazów jest ograniczone w tym środowisku — skopiowano adres Data URL PNG (lub użyj przycisku „Pobierz PNG”).',
+            'info'
+          );
+        } catch (fallbackErr) {
+          showStatus(
+            'Kopiowanie do schowka jest zablokowane przez przeglądarkę lub osadzenie. Użyj przycisku „Pobierz PNG”.',
+            'error'
+          );
+        }
+      }
+
+      // Podpięcie zdarzeń interfejsu
+      inputEl.addEventListener('input', (e) => {
+        state.text = e.target.value;
+        renderQRCode();
+      });
+
+      btnAddHttpsEl.addEventListener('click', () => {
+        const trimmed = state.text.trim();
+        if (trimmed && !/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(trimmed)) {
+          state.text = 'https://' + trimmed;
+          inputEl.value = state.text;
+          renderQRCode();
+          showStatus('Dodano prefiks https:// do linku.', 'info');
+        }
+      });
+
+      btnClearInputEl.addEventListener('click', () => {
+        state.text = '';
+        inputEl.value = '';
+        inputEl.focus();
+        renderQRCode();
+      });
+
+      sampleButtons.forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const sample = btn.getAttribute('data-sample') || '';
+          state.text = sample;
+          inputEl.value = sample;
+          renderQRCode();
+        });
+      });
+
+      sizeInputEl.addEventListener('input', (e) => {
+        state.size = parseInt(e.target.value, 10) || DEFAULTS.size;
+        renderQRCode();
+      });
+
+      marginInputEl.addEventListener('input', (e) => {
+        state.margin = parseInt(e.target.value, 10);
+        if (Number.isNaN(state.margin)) state.margin = DEFAULTS.margin;
+        renderQRCode();
+      });
+
+      eccButtons.forEach((btn) => {
+        btn.addEventListener('click', () => {
+          state.ecc = btn.dataset.ecc || 'M';
+          renderQRCode();
+        });
+      });
+
+      fgColorEl.addEventListener('input', (e) => {
+        state.fgColor = e.target.value;
+        renderQRCode();
+      });
+
+      bgColorEl.addEventListener('input', (e) => {
+        state.bgColor = e.target.value;
+        renderQRCode();
+      });
+
+      btnResetDefaultsEl.addEventListener('click', () => {
+        Object.assign(state, DEFAULTS);
+        inputEl.value = DEFAULTS.text;
+        sizeInputEl.value = String(DEFAULTS.size);
+        marginInputEl.value = String(DEFAULTS.margin);
+        fgColorEl.value = DEFAULTS.fgColor;
+        bgColorEl.value = DEFAULTS.bgColor;
+        renderQRCode();
+        showStatus('Przywrócono domyślne ustawienia.', 'info');
+      });
+
+      btnDownloadPngEl.addEventListener('click', handleDownloadPng);
+      btnCopyPngEl.addEventListener('click', handleCopyPng);
+
+      // Pierwsze renderowanie na starcie
+      renderQRCode();
+    })();
+  </script>
+</body>
+</html>
